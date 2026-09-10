@@ -1,0 +1,242 @@
+// Prisma schema for the HR Management System
+// Run `npx prisma migrate dev --name init` after configuring DATABASE_URL in .env
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  HR
+  MANAGER
+  EMPLOYEE
+}
+
+enum BillingStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  SUSPENDED
+}
+
+// A paying customer of the platform. Every employee, department, leave request,
+// etc. belongs to exactly one Company. SUPER_ADMIN users (the platform owner)
+// don't belong to any company — they manage the Company records themselves.
+model Company {
+  id            String        @id @default(uuid())
+  name          String
+  slug          String        @unique
+  contactName   String?
+  contactEmail  String
+  billingStatus BillingStatus @default(TRIALING)
+
+  // Price charged per active employee ("seat") per month, in the smallest
+  // currency unit (e.g. cents). Adjustable per company for custom deals.
+  pricePerSeatCents Int @default(500)
+
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  trialEndsAt          DateTime?
+  suspendedAt          DateTime?
+
+  users       User[]
+  departments Department[]
+  announcements Announcement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum EmployeeStatus {
+  ONBOARDING
+  ACTIVE
+  ON_LEAVE
+  SUSPENDED
+  TERMINATED
+}
+
+enum LeaveType {
+  ANNUAL
+  CASUAL
+  MATERNITY
+  PATERNITY
+  UNPAID
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum AppraisalStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWED
+  ACKNOWLEDGED
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  employees User[]
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, name])
+}
+
+model User {
+  id             String         @id @default(uuid())
+  employeeCode   String?        // e.g. EMP-0001 — scoped per company; null for platform SUPER_ADMINs
+  firstName      String
+  lastName       String
+  email          String         @unique
+  passwordHash   String
+  role           Role           @default(EMPLOYEE)
+  position       String?
+  status         EmployeeStatus @default(ONBOARDING)
+  dateHired      DateTime       @default(now())
+  phone          String?
+
+  // Null only for SUPER_ADMIN (platform owner) accounts, which aren't tied to a company.
+  companyId      String?
+  company        Company?       @relation(fields: [companyId], references: [id])
+
+  departmentId   String?
+  department     Department?    @relation(fields: [departmentId], references: [id])
+
+  managerId      String?
+  manager        User?          @relation("ManagerReports", fields: [managerId], references: [id])
+  reports        User[]         @relation("ManagerReports")
+
+  onboardingTasks   OnboardingTask[]
+  leaveRequests     LeaveRequest[]        @relation("EmployeeLeaves")
+  approvedLeaves    LeaveRequest[]        @relation("ApproverLeaves")
+  sickLeaves        SickLeaveRequest[]    @relation("EmployeeSickLeaves")
+  approvedSickLeaves SickLeaveRequest[]   @relation("ApproverSickLeaves")
+  appraisalsReceived Appraisal[]          @relation("EmployeeAppraisals")
+  appraisalsGiven    Appraisal[]          @relation("ReviewerAppraisals")
+  leaveBalances      LeaveBalance[]
+  attendanceEntries  AttendanceEntry[]    @relation("EmployeeAttendance")
+  announcementsPosted Announcement[]      @relation("AnnouncementsAuthored")
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([companyId, employeeCode])
+}
+
+model OnboardingTask {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  title       String
+  description String?
+  dueDate     DateTime?
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+}
+
+model LeaveRequest {
+  id              String      @id @default(uuid())
+  userId          String
+  user            User        @relation("EmployeeLeaves", fields: [userId], references: [id])
+  type            LeaveType
+  startDate       DateTime
+  endDate         DateTime
+  daysRequested   Float
+  reason          String?
+  status          LeaveStatus @default(PENDING)
+  approverId      String?
+  approver        User?       @relation("ApproverLeaves", fields: [approverId], references: [id])
+  approverComment String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model SickLeaveRequest {
+  id                    String      @id @default(uuid())
+  userId                String
+  user                  User        @relation("EmployeeSickLeaves", fields: [userId], references: [id])
+  startDate             DateTime
+  endDate               DateTime
+  daysRequested         Float
+  reason                String?
+  medicalCertificateUrl String?
+  status                LeaveStatus @default(PENDING)
+  approverId            String?
+  approver              User?       @relation("ApproverSickLeaves", fields: [approverId], references: [id])
+  approverComment       String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+}
+
+model LeaveBalance {
+  id                String @id @default(uuid())
+  userId            String
+  user              User   @relation(fields: [userId], references: [id])
+  year              Int
+  annualEntitlement Float  @default(20)
+  annualUsed        Float  @default(0)
+  sickEntitlement   Float  @default(10)
+  sickUsed          Float  @default(0)
+
+  @@unique([userId, year])
+}
+
+model Appraisal {
+  id                  String          @id @default(uuid())
+  employeeId          String
+  employee            User            @relation("EmployeeAppraisals", fields: [employeeId], references: [id])
+  reviewerId          String
+  reviewer            User            @relation("ReviewerAppraisals", fields: [reviewerId], references: [id])
+  period              String          // e.g. "2026-H1", "Q3-2026"
+  goals               String?
+  achievements        String?
+  strengths           String?
+  areasForImprovement String?
+  rating              Int?            // 1-5
+  employeeComment     String?
+  status              AppraisalStatus @default(DRAFT)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+// One row per clock-in. clockOut is null while the employee is still clocked in.
+model AttendanceEntry {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation("EmployeeAttendance", fields: [userId], references: [id])
+  clockIn   DateTime  @default(now())
+  clockOut  DateTime?
+  note      String?
+  createdAt DateTime  @default(now())
+}
+
+// Company-wide news/updates posted by HR/Admin, visible to everyone in the company.
+model Announcement {
+  id        String   @id @default(uuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  authorId  String
+  author    User     @relation("AnnouncementsAuthored", fields: [authorId], references: [id])
+  title     String
+  body      String
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
