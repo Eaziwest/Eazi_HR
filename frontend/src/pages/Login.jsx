@@ -47,10 +47,6 @@ export default function Login() {
           {error && <p className="error-text">{error}</p>}
           <button type="submit" disabled={submitting}>{submitting ? "Logging in..." : "Log in"}</button>
         </form>
-        <p style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 16, lineHeight: 1.5 }}>
-          Default admin: admin@company.com / Admin@12345 (after running the seed script) —
-          please change this password after your first login.
-        </p>
       </div>
     </div>
   );
