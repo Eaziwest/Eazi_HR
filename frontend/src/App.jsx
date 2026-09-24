@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
+import Topbar from "./components/Topbar";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -20,7 +21,10 @@ function Layout({ children }) {
   return (
     <div className="layout">
       <Sidebar />
-      <div className="main">{children}</div>
+      <div className="main-wrap">
+        <Topbar />
+        <div className="main">{children}</div>
+      </div>
     </div>
   );
 }
