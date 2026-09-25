@@ -107,7 +107,7 @@ export default function Dashboard() {
       </div>
 
       <div className="stat-grid">
-        <div className="card" style={{ flex: "1 1 26 0px" }}>
+        <div className="card" style={{ flex: "1 1 260px" }}>
           <div className="card-header">
             <span className="card-header-title"><span className="card-icon"><IconClock /></span><h3>Today</h3></span>
           </div>
