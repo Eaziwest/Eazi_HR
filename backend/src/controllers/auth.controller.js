@@ -3,6 +3,16 @@ const { z } = require("zod");
 const prisma = require("../config/db");
 const { signToken } = require("../utils/jwt");
 const { syncCompanySeats } = require("../utils/seats");
+const { createUserWithEmployeeCode } = require("../utils/employeeCode");
+
+// Only ADMIN may grant ADMIN or HR — otherwise an HR account could create (or
+// promote) its way into an ADMIN account and remove the real admins. HR can
+// still create MANAGER/EMPLOYEE accounts, which covers normal day-to-day hiring.
+function canAssignRole(actorRole, targetRole) {
+  if (!targetRole) return true;
+  if (actorRole === "ADMIN") return true;
+  return !["ADMIN", "HR"].includes(targetRole);
+}
 
 const registerSchema = z.object({
   firstName: z.string().min(1),
@@ -20,18 +30,16 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-// Generates a sequential employee code scoped to one company, e.g. EMP-0001, EMP-0002.
-async function nextEmployeeCode(companyId) {
-  const count = await prisma.user.count({ where: { companyId } });
-  return `EMP-${String(count + 1).padStart(4, "0")}`;
-}
-
 // Called by an HR/Admin user to onboard a new employee INTO THEIR OWN COMPANY.
 // Does not log the caller in as the new hire — returns the created employee's
 // basic info only. SUPER_ADMIN never calls this; use /api/companies instead.
 async function register(req, res) {
   const data = registerSchema.parse(req.body);
   const companyId = req.user.companyId;
+
+  if (!canAssignRole(req.user.role, data.role)) {
+    return res.status(403).json({ message: "Only an Admin can create Admin or HR accounts" });
+  }
 
   const company = await prisma.company.findUnique({ where: { id: companyId } });
   if (!company) return res.status(400).json({ message: "Your account isn't linked to a company" });
@@ -40,22 +48,19 @@ async function register(req, res) {
   }
 
   const passwordHash = await bcrypt.hash(data.password, 10);
-  const employeeCode = await nextEmployeeCode(companyId);
 
-  const user = await prisma.user.create({
-    data: {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
-      passwordHash,
-      role: data.role || "EMPLOYEE",
-      departmentId: data.departmentId,
-      managerId: data.managerId,
-      position: data.position,
-      employeeCode,
-      status: "ONBOARDING",
-      companyId,
-    },
+  const user = await createUserWithEmployeeCode({
+    firstName: data.firstName,
+    lastName: data.lastName,
+    email: data.email,
+    passwordHash,
+    role: data.role || "EMPLOYEE",
+    departmentId: data.departmentId,
+    managerId: data.managerId,
+    position: data.position,
+    status: "ONBOARDING",
+    companyId,
+    mustChangePassword: true,
   });
 
   // Seed a default onboarding checklist for the new hire
@@ -100,10 +105,10 @@ async function login(req, res) {
     }
   }
 
-  const token = signToken({ id: user.id, role: user.role, email: user.email, companyId: user.companyId });
+  const token = signToken({ id: user.id, role: user.role, email: user.email, companyId: user.companyId, mustChangePassword: user.mustChangePassword });
   res.json({
     token,
-    user: { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, role: user.role, employeeCode: user.employeeCode, companyId: user.companyId },
+    user: { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, role: user.role, employeeCode: user.employeeCode, companyId: user.companyId, mustChangePassword: user.mustChangePassword },
   });
 }
 
@@ -113,6 +118,7 @@ async function me(req, res) {
     select: {
       id: true, firstName: true, lastName: true, email: true, role: true,
       employeeCode: true, status: true, position: true, dateHired: true,
+      mustChangePassword: true,
       department: true, manager: { select: { id: true, firstName: true, lastName: true } },
       company: { select: { id: true, name: true, billingStatus: true } },
     },
@@ -133,9 +139,16 @@ async function changePassword(req, res) {
   if (!valid) return res.status(401).json({ message: "Current password is incorrect" });
 
   const passwordHash = await bcrypt.hash(data.newPassword, 10);
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash, mustChangePassword: false },
+  });
 
-  res.json({ message: "Password updated successfully" });
+  // Re-issue the token so a forced first-login password change takes effect
+  // immediately, without asking the person to log in again.
+  const token = signToken({ id: updated.id, role: updated.role, email: updated.email, companyId: updated.companyId, mustChangePassword: false });
+
+  res.json({ message: "Password updated successfully", token });
 }
 
 module.exports = { register, login, me, changePassword };

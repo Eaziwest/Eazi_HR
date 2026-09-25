@@ -74,6 +74,21 @@ async function decideSickLeave(req, res) {
     return res.status(400).json({ message: `This request has already been ${existing.status.toLowerCase()}` });
   }
 
+  if (data.status === "APPROVED") {
+    const year = new Date(existing.startDate).getFullYear();
+    const balance = await prisma.leaveBalance.upsert({
+      where: { userId_year: { userId: existing.userId, year } },
+      update: {},
+      create: { userId: existing.userId, year },
+    });
+    const remaining = balance.sickEntitlement - balance.sickUsed;
+    if (existing.daysRequested > remaining) {
+      return res.status(409).json({
+        message: `Approving this would exceed the employee's remaining sick leave balance (${remaining} day${remaining === 1 ? "" : "s"} left, ${existing.daysRequested} requested). You can still adjust their balance first if this should be an exception.`,
+      });
+    }
+  }
+
   const sickLeave = await prisma.sickLeaveRequest.update({
     where: { id: req.params.id },
     data: { status: data.status, approverComment: data.approverComment, approverId: req.user.id },
@@ -91,4 +106,20 @@ async function decideSickLeave(req, res) {
   res.json(sickLeave);
 }
 
-module.exports = { requestSickLeave, mySickLeaves, listSickLeaves, decideSickLeave };
+async function cancelSickLeave(req, res) {
+  const sickLeave = await prisma.sickLeaveRequest.findUnique({ where: { id: req.params.id } });
+  if (!sickLeave || sickLeave.userId !== req.user.id) {
+    return res.status(403).json({ message: "You can only cancel your own sick leave requests" });
+  }
+  if (sickLeave.status !== "PENDING") {
+    return res.status(400).json({ message: "Only pending requests can be cancelled" });
+  }
+
+  const updated = await prisma.sickLeaveRequest.update({
+    where: { id: req.params.id },
+    data: { status: "CANCELLED" },
+  });
+  res.json(updated);
+}
+
+module.exports = { requestSickLeave, mySickLeaves, listSickLeaves, decideSickLeave, cancelSickLeave };

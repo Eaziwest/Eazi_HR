@@ -54,7 +54,13 @@ export default function Attendance() {
 
   function loadStatus() { api.get("/attendance/me/status").then((res) => setStatus(res.data)); }
   function loadHistory() { api.get("/attendance/me/history").then((res) => setHistory(res.data)); }
-  function loadTeam() { if (isHR) api.get("/attendance/today").then((res) => setTeam(res.data)); }
+  function loadTeam() {
+    if (!isHR) return;
+    const now = new Date();
+    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    api.get("/attendance/today", { params: { date: localDate, tzOffset: now.getTimezoneOffset() } })
+      .then((res) => setTeam(res.data));
+  }
 
   useEffect(() => { loadStatus(); loadHistory(); loadTeam(); }, []);
 

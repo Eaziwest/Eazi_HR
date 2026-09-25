@@ -110,6 +110,9 @@ model User {
   status         EmployeeStatus @default(ONBOARDING)
   dateHired      DateTime       @default(now())
   phone          String?
+  // True right after HR creates/imports the account with a password the
+  // employee didn't choose themselves. Cleared the first time they change it.
+  mustChangePassword Boolean    @default(false)
 
   // Null only for SUPER_ADMIN (platform owner) accounts, which aren't tied to a company.
   companyId      String?

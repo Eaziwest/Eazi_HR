@@ -47,6 +47,19 @@ export default function SickLeaves() {
     }
   }
 
+  async function cancel(id) {
+    setActionError("");
+    setActionId(id);
+    try {
+      await api.patch(`/sick-leaves/${id}/cancel`);
+      loadMine();
+    } catch (err) {
+      setActionError(getErrorMessage(err, "Could not cancel this request"));
+    } finally {
+      setActionId(null);
+    }
+  }
+
   return (
     <div>
       <h1>Sick Leave</h1>
@@ -65,17 +78,23 @@ export default function SickLeaves() {
 
       <div className="card">
         <h3>My sick leave history</h3>
+        {actionError && <p className="error-text">{actionError}</p>}
         <table>
-          <thead><tr><th>Dates</th><th>Days</th><th>Status</th></tr></thead>
+          <thead><tr><th>Dates</th><th>Days</th><th>Status</th><th></th></tr></thead>
           <tbody>
             {mine.map((s) => (
               <tr key={s.id}>
                 <td>{new Date(s.startDate).toLocaleDateString()} – {new Date(s.endDate).toLocaleDateString()}</td>
                 <td>{s.daysRequested}</td>
                 <td><span className={`badge ${s.status}`}>{s.status}</span></td>
+                <td>
+                  {s.status === "PENDING" && (
+                    <button className="secondary" onClick={() => cancel(s.id)} disabled={actionId === s.id}>Cancel</button>
+                  )}
+                </td>
               </tr>
             ))}
-            {mine.length === 0 && <tr><td colSpan={3}>No sick leave recorded.</td></tr>}
+            {mine.length === 0 && <tr><td colSpan={4}>No sick leave recorded.</td></tr>}
           </tbody>
         </table>
       </div>

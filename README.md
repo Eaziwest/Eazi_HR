@@ -37,13 +37,28 @@ hr-system/
 ```bash
 cd backend
 npm install
---do not run cp .env.example .env      # then edit DATABASE_URL and JWT_SECRET
-npx prisma migrate dev --name init
+cp .env.example .env      # then edit DATABASE_URL and JWT_SECRET
+npm run prisma:deploy      # applies existing migrations (uses the pinned local prisma, never a stray global/newer one)
 npm run seed               # creates admin@company.com / Admin@12345
 npm run dev                # runs on http://localhost:4000
 ```
 
 Requires a running PostgreSQL instance matching `DATABASE_URL` in `.env`.
+
+> **Upgrading an existing database?** Two new migrations were added
+> (`prevent_duplicate_open_attendance`, `add_must_change_password`). `npm run prisma:deploy` picks them up automatically — no manual steps needed.
+
+> **Getting a `migrate`/`migration` command-not-found error, or `@prisma/composer` mentioned in the output?**
+> Prisma has a v8 pre-release out, and something in your environment (a global
+> `prisma` install, an npx cache, or dependency hoisting in a monorepo) is
+> resolving to that instead of the `5.19.1` this project is pinned to and built
+> against — v8 renamed `migrate` to `migration` and restructured
+> `@prisma/client`'s internals, so nothing here will work against it. Always
+> use the `npm run prisma:*` scripts above (never a bare `npx prisma ...`),
+> which always resolve to the exact pinned local version. If it still
+> misbehaves: `rm -rf node_modules package-lock.json && npm install`, then
+> confirm with `npx prisma --version` that it reports `5.19.1` before doing
+> anything else.
 
 ### 2. Frontend
 
@@ -56,6 +71,11 @@ npm run dev                # runs on http://localhost:5173
 
 Log in with the seeded admin account, or have HR add new employees from the **Employees** page (this auto-creates their onboarding checklist and login).
 
+> New employees (via **Employees → Add** or the bulk `.xlsx` import) are created
+> with `mustChangePassword: true`. On their first login they're shown a forced
+> "set a new password" screen before they can access anything else — they
+> can't skip it or work around it by calling the API directly.
+
 ## API overview
 
 | Area        | Endpoints |
@@ -64,7 +84,7 @@ Log in with the seeded admin account, or have HR add new employees from the **Em
 | Employees   | `GET/PATCH/DELETE /api/employees`, `GET /api/employees/export`, `GET /api/employees/import-template`, `POST /api/employees/import` (multipart file upload) |
 | Onboarding  | `GET /api/onboarding/me`, `POST /api/onboarding`, `PATCH /api/onboarding/:id/complete` |
 | Leaves      | `POST /api/leaves`, `GET /api/leaves/me`, `GET /api/leaves`, `PATCH /api/leaves/:id/decision` |
-| Sick leaves | `POST /api/sick-leaves`, `GET /api/sick-leaves/me`, `PATCH /api/sick-leaves/:id/decision` |
+| Sick leaves | `POST /api/sick-leaves`, `GET /api/sick-leaves/me`, `PATCH /api/sick-leaves/:id/decision`, `PATCH /api/sick-leaves/:id/cancel` |
 | Appraisals  | `POST /api/appraisals`, `GET /api/appraisals/me`, `PATCH /api/appraisals/:id` |
 
 Full request/response shapes are visible in each `*.controller.js` file.

@@ -20,6 +20,26 @@ async function requestLeave(req, res) {
   const data = requestSchema.parse(req.body);
   const daysRequested = daysBetween(data.startDate, data.endDate);
 
+  if (data.type === "ANNUAL") {
+    const year = new Date(data.startDate).getFullYear();
+    const balance = await prisma.leaveBalance.upsert({
+      where: { userId_year: { userId: req.user.id, year } },
+      update: {},
+      create: { userId: req.user.id, year },
+    });
+    const pending = await prisma.leaveRequest.aggregate({
+      where: { userId: req.user.id, type: "ANNUAL", status: "PENDING" },
+      _sum: { daysRequested: true },
+    });
+    const alreadyCommitted = balance.annualUsed + (pending._sum.daysRequested || 0);
+    const remaining = balance.annualEntitlement - alreadyCommitted;
+    if (daysRequested > remaining) {
+      return res.status(400).json({
+        message: `This request exceeds your remaining annual leave balance (${remaining} day${remaining === 1 ? "" : "s"} left, ${daysRequested} requested).`,
+      });
+    }
+  }
+
   const leave = await prisma.leaveRequest.create({
     data: {
       userId: req.user.id,
@@ -73,6 +93,21 @@ async function decideLeave(req, res) {
   }
   if (existing.status !== "PENDING") {
     return res.status(400).json({ message: `This request has already been ${existing.status.toLowerCase()}` });
+  }
+
+  if (data.status === "APPROVED" && existing.type === "ANNUAL") {
+    const year = new Date(existing.startDate).getFullYear();
+    const balance = await prisma.leaveBalance.upsert({
+      where: { userId_year: { userId: existing.userId, year } },
+      update: {},
+      create: { userId: existing.userId, year },
+    });
+    const remaining = balance.annualEntitlement - balance.annualUsed;
+    if (existing.daysRequested > remaining) {
+      return res.status(409).json({
+        message: `Approving this would exceed the employee's remaining annual leave balance (${remaining} day${remaining === 1 ? "" : "s"} left, ${existing.daysRequested} requested).`,
+      });
+    }
   }
 
   const leave = await prisma.leaveRequest.update({

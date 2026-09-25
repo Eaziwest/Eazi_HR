@@ -7,6 +7,7 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 
 const errorHandler = require("./middleware/errorHandler");
+const { requireAuth, requirePasswordChanged } = require("./middleware/auth");
 const stripeWebhookHandler = require("./webhooks/stripe.webhook");
 
 const authRoutes = require("./routes/auth.routes");
@@ -36,6 +37,11 @@ app.use(morgan("dev"));
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
 app.use("/api/auth", authRoutes);
+
+// Everything else requires a valid token AND (if this is a first login with a
+// temp password) that the password has been changed first.
+app.use("/api", requireAuth, requirePasswordChanged);
+
 app.use("/api/employees", employeeRoutes);
 app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/leaves", leaveRoutes);

@@ -4,12 +4,15 @@ const crypto = require("crypto");
 const ExcelJS = require("exceljs");
 const prisma = require("../config/db");
 const { syncCompanySeats } = require("../utils/seats");
+const { createUserWithEmployeeCode } = require("../utils/employeeCode");
 
 const VALID_ROLES = ["ADMIN", "HR", "MANAGER", "EMPLOYEE"];
 
-async function nextEmployeeCode(companyId) {
-  const count = await prisma.user.count({ where: { companyId } });
-  return `EMP-${String(count + 1).padStart(4, "0")}`;
+// Only ADMIN may grant ADMIN or HR — see auth.controller.js for the full rationale.
+function canAssignRole(actorRole, targetRole) {
+  if (!targetRole) return true;
+  if (actorRole === "ADMIN") return true;
+  return !["ADMIN", "HR"].includes(targetRole);
 }
 
 // Everything below is scoped to req.user.companyId — one company's HR staff
@@ -78,6 +81,14 @@ async function updateEmployee(req, res) {
   }
 
   const data = updateSchema.parse(req.body);
+
+  if (!canAssignRole(req.user.role, data.role)) {
+    return res.status(403).json({ message: "Only an Admin can grant Admin or HR access" });
+  }
+  if (data.role && data.role !== existing.role && req.params.id === req.user.id) {
+    return res.status(403).json({ message: "You can't change your own role" });
+  }
+
   const employee = await prisma.user.update({
     where: { id: req.params.id },
     data,
@@ -241,7 +252,8 @@ async function importEmployees(req, res) {
       const position = getVal(row, "position");
       const departmentName = getVal(row, "department");
       const roleRaw = (getVal(row, "role") || "EMPLOYEE").toUpperCase();
-      const role = VALID_ROLES.includes(roleRaw) ? roleRaw : "EMPLOYEE";
+      let role = VALID_ROLES.includes(roleRaw) ? roleRaw : "EMPLOYEE";
+      if (!canAssignRole(req.user.role, role)) role = "EMPLOYEE";
       const providedPassword = getVal(row, "password");
       const tempPassword = providedPassword || crypto.randomBytes(4).toString("hex");
 
@@ -256,13 +268,10 @@ async function importEmployees(req, res) {
       }
 
       const passwordHash = await bcrypt.hash(tempPassword, 10);
-      const employeeCode = await nextEmployeeCode(companyId);
 
-      const user = await prisma.user.create({
-        data: {
-          firstName, lastName, email, passwordHash, role, position, departmentId,
-          employeeCode, status: "ONBOARDING", companyId,
-        },
+      const user = await createUserWithEmployeeCode({
+        firstName, lastName, email, passwordHash, role, position, departmentId,
+        status: "ONBOARDING", companyId, mustChangePassword: true,
       });
 
       await prisma.onboardingTask.createMany({
@@ -278,7 +287,7 @@ async function importEmployees(req, res) {
 
       results.created.push({
         row: rowNumber,
-        employeeCode,
+        employeeCode: user.employeeCode,
         email,
         temporaryPassword: providedPassword ? undefined : tempPassword,
       });

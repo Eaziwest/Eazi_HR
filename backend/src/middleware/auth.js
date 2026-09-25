@@ -27,4 +27,16 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { requireAuth, requireRole };
+// Blocks every action until a forced password change is done. Applied globally
+// to everything under /api except /api/auth/*, so a first-login temp password
+// (from HR registering someone, or the bulk import) can't be used to browse the
+// rest of the app before it's changed — closing that gap in the frontend-only
+// redirect, which a direct API call could otherwise bypass.
+function requirePasswordChanged(req, res, next) {
+  if (req.user?.mustChangePassword) {
+    return res.status(403).json({ code: "MUST_CHANGE_PASSWORD", message: "Please change your password before continuing" });
+  }
+  next();
+}
+
+module.exports = { requireAuth, requireRole, requirePasswordChanged };

@@ -2,17 +2,15 @@ import { useState } from "react";
 import api, { getErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
-export default function Profile() {
-  const { user, setUser } = useAuth();
+export default function ForcePasswordChange() {
+  const { user, setUser, logout } = useAuth();
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
-    setSuccess("");
 
     if (form.newPassword !== form.confirmPassword) {
       setError("New password and confirmation don't match");
@@ -31,8 +29,6 @@ export default function Profile() {
       });
       if (res.data.token) localStorage.setItem("token", res.data.token);
       setUser((u) => (u ? { ...u, mustChangePassword: false } : u));
-      setSuccess("Password updated successfully.");
-      setForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
     } catch (err) {
       setError(getErrorMessage(err, "Could not update password"));
     } finally {
@@ -41,30 +37,16 @@ export default function Profile() {
   }
 
   return (
-    <div>
-      <h1>My Profile</h1>
-
+    <div className="login-wrapper">
       <div className="card">
-        <h3>Account details</h3>
-        <table>
-          <tbody>
-            <tr><th>Name</th><td>{user?.firstName} {user?.lastName}</td></tr>
-            <tr><th>Employee code</th><td>{user?.employeeCode || "-"}</td></tr>
-            <tr><th>Email</th><td>{user?.email}</td></tr>
-            <tr><th>Role</th><td>{user?.role}</td></tr>
-            <tr><th>Position</th><td>{user?.position || "-"}</td></tr>
-            <tr><th>Department</th><td>{user?.department?.name || "-"}</td></tr>
-            <tr><th>Manager</th><td>{user?.manager ? `${user.manager.firstName} ${user.manager.lastName}` : "-"}</td></tr>
-            <tr><th>Status</th><td><span className={`badge ${user?.status}`}>{user?.status}</span></td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card">
-        <h3>Change password</h3>
+        <h1 style={{ fontSize: 19, marginBottom: 4 }}>Set a new password</h1>
+        <p style={{ color: "var(--text-dim)", fontSize: 13, marginTop: 0, marginBottom: 18 }}>
+          Hi {user?.firstName}, your account was set up with a temporary password.
+          Please choose a new one before continuing to Eazi HR.
+        </p>
         <form onSubmit={handleSubmit}>
           <input
-            type="password" placeholder="Current password" required
+            type="password" placeholder="Temporary / current password" required
             value={form.currentPassword}
             onChange={(e) => setForm({ ...form, currentPassword: e.target.value })}
           />
@@ -79,9 +61,11 @@ export default function Profile() {
             onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
           />
           {error && <p className="error-text">{error}</p>}
-          {success && <p style={{ color: "var(--success)", fontSize: 13 }}>{success}</p>}
-          <button type="submit" disabled={submitting}>{submitting ? "Updating..." : "Update password"}</button>
+          <button type="submit" disabled={submitting}>{submitting ? "Updating..." : "Set new password"}</button>
         </form>
+        <button type="button" className="secondary" style={{ marginTop: 10 }} onClick={logout}>
+          Log out instead
+        </button>
       </div>
     </div>
   );
