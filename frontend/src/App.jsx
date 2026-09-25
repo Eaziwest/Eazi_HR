@@ -1,4 +1,5 @@
 import { Routes, Route } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -38,44 +39,47 @@ function Home() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
+    <>
+      <Routes>
+        <Route path="/login" element={<Login />} />
 
-      <Route path="/" element={
-        <ProtectedRoute><Layout><Home /></Layout></ProtectedRoute>
-      } />
-      <Route path="/companies" element={
-        <ProtectedRoute roles={["SUPER_ADMIN"]}><Layout><Companies /></Layout></ProtectedRoute>
-      } />
-      <Route path="/onboarding" element={
-        <ProtectedRoute roles={["ADMIN", "HR", "MANAGER", "EMPLOYEE"]}><Layout><Onboarding /></Layout></ProtectedRoute>
-      } />
-      <Route path="/leaves" element={
-        <ProtectedRoute roles={["ADMIN", "HR", "MANAGER", "EMPLOYEE"]}><Layout><Leaves /></Layout></ProtectedRoute>
-      } />
-      <Route path="/sick-leaves" element={
-        <ProtectedRoute roles={["ADMIN", "HR", "MANAGER", "EMPLOYEE"]}><Layout><SickLeaves /></Layout></ProtectedRoute>
-      } />
-      <Route path="/appraisals" element={
-        <ProtectedRoute roles={["ADMIN", "HR", "MANAGER", "EMPLOYEE"]}><Layout><Appraisals /></Layout></ProtectedRoute>
-      } />
-      <Route path="/employees" element={
-        <ProtectedRoute roles={["ADMIN", "HR"]}><Layout><Employees /></Layout></ProtectedRoute>
-      } />
-      <Route path="/attendance" element={
-        <ProtectedRoute roles={["ADMIN", "HR", "MANAGER", "EMPLOYEE"]}><Layout><Attendance /></Layout></ProtectedRoute>
-      } />
-      <Route path="/announcements" element={
-        <ProtectedRoute roles={["ADMIN", "HR", "MANAGER", "EMPLOYEE"]}><Layout><Announcements /></Layout></ProtectedRoute>
-      } />
-      <Route path="/directory" element={
-        <ProtectedRoute roles={["ADMIN", "HR", "MANAGER", "EMPLOYEE"]}><Layout><Directory /></Layout></ProtectedRoute>
-      } />
-      <Route path="/profile" element={
-        <ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>
-      } />
+        <Route path="/" element={
+          <ProtectedRoute><Layout><Home /></Layout></ProtectedRoute>
+        } />
+        <Route path="/companies" element={
+          <ProtectedRoute roles={["SUPER_ADMIN"]}><Layout><Companies /></Layout></ProtectedRoute>
+        } />
+        <Route path="/onboarding" element={
+          <ProtectedRoute roles={["ADMIN", "HR", "MANAGER", "EMPLOYEE"]}><Layout><Onboarding /></Layout></ProtectedRoute>
+        } />
+        <Route path="/leaves" element={
+          <ProtectedRoute roles={["ADMIN", "HR", "MANAGER", "EMPLOYEE"]}><Layout><Leaves /></Layout></ProtectedRoute>
+        } />
+        <Route path="/sick-leaves" element={
+          <ProtectedRoute roles={["ADMIN", "HR", "MANAGER", "EMPLOYEE"]}><Layout><SickLeaves /></Layout></ProtectedRoute>
+        } />
+        <Route path="/appraisals" element={
+          <ProtectedRoute roles={["ADMIN", "HR", "MANAGER", "EMPLOYEE"]}><Layout><Appraisals /></Layout></ProtectedRoute>
+        } />
+        <Route path="/employees" element={
+          <ProtectedRoute roles={["ADMIN", "HR"]}><Layout><Employees /></Layout></ProtectedRoute>
+        } />
+        <Route path="/attendance" element={
+          <ProtectedRoute roles={["ADMIN", "HR", "MANAGER", "EMPLOYEE"]}><Layout><Attendance /></Layout></ProtectedRoute>
+        } />
+        <Route path="/announcements" element={
+          <ProtectedRoute roles={["ADMIN", "HR", "MANAGER", "EMPLOYEE"]}><Layout><Announcements /></Layout></ProtectedRoute>
+        } />
+        <Route path="/directory" element={
+          <ProtectedRoute roles={["ADMIN", "HR", "MANAGER", "EMPLOYEE"]}><Layout><Directory /></Layout></ProtectedRoute>
+        } />
+        <Route path="/profile" element={
+          <ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>
+        } />
 
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+      <Analytics />
+    </>
   );
 }
